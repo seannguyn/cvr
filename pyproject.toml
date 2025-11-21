@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pccs-cvr"
+version = "0.1.0"
+description = "PCCS CVR"
+authors = [{ name = "PCSS"}]
+requires-python = ">=3.9"
+license = {text = "MIT"}
+
+[project.scripts]
+pccs-cvr = "pccs_cvr.main:main"
