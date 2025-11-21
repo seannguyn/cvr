@@ -174,12 +174,12 @@ def cleanse_k8s_resouces_csv(data: List[Dict[str, str]], filepath: str) -> List[
         
     return cleansed_data
 
-def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[str, str]], output_base_path: str, cluster_name: str, scan_date: str):
+def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[str, str]], output_base_path: str, scan_date: str):
     """Joins K8s and Wiz data, generates CSV and Markdown reports."""
     logger = logging.getLogger(__name__)
     logger.info("Generating final report...")
     
-    # Grouping dictionary: key -> list of CVE names
+    # Grouping dictionary: key -> set of (CVE Name, CVE Link)
     grouped_data = {}
     
     # Severity order for sorting
@@ -206,19 +206,31 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
                 if key not in grouped_data:
                     grouped_data[key] = set()
                 
-                # Add CVE Name to the set for this group
-                grouped_data[key].add(wiz_row.get('Name'))
+                # Add CVE Name and Link to the set for this group
+                cve_name = wiz_row.get('Name')
+                cve_link = wiz_row.get('Link', '')
+                grouped_data[key].add((cve_name, cve_link))
 
     # Convert grouped data to list of dicts with CamelCase keys
-    # Requested order: Cluster, Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName
+    # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName
     final_rows = []
     for key, cves in grouped_data.items():
+        # Sort CVEs by name
+        sorted_cves = sorted(list(cves), key=lambda x: x[0])
+        
+        # Format CVEs as [Name](Link)
+        cve_strings = []
+        for name, link in sorted_cves:
+            if link:
+                cve_strings.append(f"[{name}]({link})")
+            else:
+                cve_strings.append(name)
+        
         row = {
-            'Cluster': cluster_name,
             'Image': key[3],
             'AssetName': key[4],
             'Severity': key[5],
-            'CVEs': ", ".join(sorted(list(cves))), # Renamed from Name
+            'CVEs': ", ".join(cve_strings),
             'Scan Date': scan_date,
             'Namespace': key[0],
             'ParentKind': key[1],
@@ -241,20 +253,18 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
 
     # Save CSV
     csv_path = f"{output_base_path}.csv"
-    keys = ['Cluster', 'Image', 'AssetName', 'Severity', 'CVEs', 'Scan Date', 'Namespace', 'ParentKind', 'ParentName']
+    keys = ['Image', 'AssetName', 'Severity', 'CVEs', 'Scan Date', 'Namespace', 'ParentKind', 'ParentName']
     with open(csv_path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=keys)
         writer.writeheader()
         writer.writerows(final_rows)
     logger.info(f"Saved final CSV report to {csv_path}")
     
-    # Save Markdown (Optional, but kept for consistency)
+    # Save Markdown
     md_path = f"{output_base_path}.md"
     with open(md_path, mode='w', encoding='utf-8') as f:
         f.write("# Container Vulnerability Report\n\n")
         
-        # Write header
-        f.write("| " + " | ".join(keys) + " |\n")
         f.write("| " + " | ".join(["---"] * len(keys)) + " |\n")
         
         # Write rows

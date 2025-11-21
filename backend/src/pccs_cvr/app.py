@@ -62,14 +62,18 @@ async def generate_report(request: ReportRequest):
         wiz_csv_path = f"{RAW_DIR}/{date_str}-wiz.csv"
         k8s_csv_path = f"{RAW_DIR}/{date_str}-k8s.csv"
         report_base_path = f"{REPORT_DIR}/{date_str}-cvr"
+        report_csv_path = f"{report_base_path}.csv"
+        
+        # Check if report already exists
+        if os.path.exists(report_csv_path):
+            logger.info(f"Report for {date_str} already exists. Returning it.")
+            return JSONResponse(content={"message": f"Report generated successfully", "file_name": report_csv_path}, status_code=200)
         
         # Check if Wiz file exists
         if not os.path.exists(wiz_csv_path):
             raise HTTPException(status_code=404, detail=f"Wiz report for {date_str} not found. Please upload it first.")
         
         # 1. Fetch K8s resources (using SDK)
-        # Note: fetch_k8s_resources now returns data directly, we need to save it to CSV for consistency/debugging or just use it
-        # The requirement says: "save it to raws/YYYY-MM-DD-k8s.csv, maintain the same columns as the current one"
         logger.info("Fetching K8s resources...")
         k8s_data = fetch_k8s_resources()
         
@@ -83,25 +87,15 @@ async def generate_report(request: ReportRequest):
                 writer.writerows(k8s_data)
         
         # 2. Cleanse K8s data
-        # We can pass the raw data directly or read from file. The current cleanse function takes data list.
         k8s_cleansed_data = cleanse_k8s_resouces_csv(k8s_data, f"{RAW_DIR}/{date_str}-k8s-cleansed.csv")
         
         # 3. Read Wiz data
         wiz_data = fetch_wiz_container_vulnerabilities_report(wiz_csv_path)
         
         # 4. Generate Final Report
-        # We need to pass a cluster name. The requirement doesn't specify how to get it, maybe default or from env?
-        # For now, let's assume a default or extract from data if possible. 
-        # The previous code took it as an arg. Let's use a default "cluster" for now or maybe we can find it in the k8s data?
-        # Actually, the requirement says "expose an endpoint /cvr, which takes in date format: YYYY-MM-DD". No cluster name.
-        # But the report needs a cluster column. I'll use "current-cluster" or similar if not provided.
-        # Or maybe I should add it to the request model? The plan didn't say.
-        # I'll stick to "current-cluster" for now as it's running in the cluster.
-        cluster_name = "current-cluster" 
+        generate_final_report(k8s_cleansed_data, wiz_data, report_base_path, date_str)
         
-        generate_final_report(k8s_cleansed_data, wiz_data, report_base_path, cluster_name, date_str)
-        
-        return JSONResponse(content={"message": f"Report generated successfully", "file_name": f"{report_base_path}.csv"}, status_code=200)
+        return JSONResponse(content={"message": f"Report generated successfully", "file_name": report_csv_path}, status_code=200)
 
     except HTTPException as he:
         raise he
@@ -109,6 +103,38 @@ async def generate_report(request: ReportRequest):
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
     except Exception as e:
         logger.error(f"Error generating report: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/reports/all")
+async def get_all_reports():
+    """Returns a list of available report dates."""
+    try:
+        files = os.listdir(REPORT_DIR)
+        dates = []
+        for f in files:
+            if f.endswith("-cvr.csv"):
+                # Extract date from filename: YYYY-MM-DD-cvr.csv
+                date_part = f.replace("-cvr.csv", "")
+                dates.append(date_part)
+        
+        # Also check raws/ for uploaded wiz files, as they are "available" to be generated?
+        # The requirement says "only allow user to select date from date picker on based on available report".
+        # But if I upload a file, I want to be able to select that date to GENERATE the report.
+        # "expose a new endpoint: report/all, which returns all report date in YYYY-MM-DD format. Frontend should call this endpoint first thing when it loads, and only allow user to select date from date picker on based on available report."
+        # If it means "available FINAL report", then I should only list generated ones.
+        # But if the user just uploaded a file, they need to select the date to generate it.
+        # So I should probably include dates that have a Wiz file available in raws/ too.
+        
+        raw_files = os.listdir(RAW_DIR)
+        for f in raw_files:
+            if f.endswith("-wiz.csv"):
+                date_part = f.replace("-wiz.csv", "")
+                if date_part not in dates:
+                    dates.append(date_part)
+                    
+        return {"dates": sorted(dates)}
+    except Exception as e:
+        logger.error(f"Error listing reports: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/reports/{date}")
