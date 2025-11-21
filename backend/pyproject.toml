@@ -9,6 +9,10 @@ description = "PCCS CVR"
 authors = [{ name = "PCSS"}]
 requires-python = ">=3.9"
 license = {text = "MIT"}
+dependencies = [
+    "mkdocs",
+    "mkdocs-material",
+]
 
 [project.scripts]
 pccs-cvr = "pccs_cvr.main:main"

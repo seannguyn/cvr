@@ -1,0 +1,6 @@
+NAMESPACE,PARENT_KIND,PARENT_NAME,IMAGE,IMAGEID
+kube-system,DaemonSet,aws-node,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon-k8s-cni-init:v1.20.4-eksbuild.2,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon-k8s-cni-init@sha256:4cc269e566688eeabf7f59533ffcc8ddb629d4956e1963b704052bfec70a9b46
+kube-system,DaemonSet,aws-node,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon/aws-network-policy-agent:v1.2.7-eksbuild.1,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon/aws-network-policy-agent@sha256:f99fb1fea5e16dc3a2429ddd0a2660d0f3b4ba40b467e81e1898b001ee54c240
+kube-system,DaemonSet,aws-node,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon-k8s-cni:v1.20.4-eksbuild.2,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon-k8s-cni@sha256:23f64d454047173490658c5866bca1a68d1b3c11df4248b2c837253d933fd150
+kube-system,ReplicaSet,coredns-57c7d7fc58,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/eks/coredns:v1.12.1-eksbuild.2,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/eks/coredns@sha256:0e6933e6d213752941bf9576656169915e79a7b555634da4b6deb1a0af86ec89
+kube-system,DaemonSet,kube-proxy,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/eks/kube-proxy:v1.33.3-eksbuild.4,602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/eks/kube-proxy@sha256:24badebaa17a42428ee44de0e66f8de456ef01f70224dd700bbff921ea3a4072

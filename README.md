@@ -92,6 +92,10 @@ python3 -m venv .venv
 # Activate it
 source .venv/bin/activate
 
+python3 -m pip install --upgrade pip
+
+pip list
+
 # Install the package in editable mode
 pip install -e .
 
