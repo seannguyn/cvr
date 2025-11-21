@@ -1,0 +1,21 @@
+backend:
+  image: pccs-cvr-backend:latest
+  replicas: 1
+  port: 8000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+frontend:
+  image: pccs-cvr-frontend:latest
+  replicas: 1
+  port: 80
+  serviceType: LoadBalancer
+
+storage:
+  size: 1Gi
+  storageClassName: efs-sc

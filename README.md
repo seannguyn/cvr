@@ -1,26 +1,57 @@
-# PCCS Container Vulnerabilities Report
+# PCCS Container Vulnerability Report (CVR)
 
-Find and report container vulnerabilities based on pod labels.
+A full-stack application to generate and view container vulnerability reports.
+
+## Architecture
+-   **Backend**: FastAPI (Python)
+-   **Frontend**: React (TypeScript, Vite)
+-   **Infrastructure**: Kubernetes (Helm)
 
 ## Prerequisites
+-   Python 3.9+
+-   Node.js 18+
+-   Kubernetes Cluster (for deployment)
 
-Ensure you have the following tools installed:
+## Local Development
 
-- **Python**: >= 3.9
-- **pip**: >= 25.3 (Required for editable installs with `pyproject.toml`)
-- **setuptools**: >= 61.0 (Build backend)
-
-## Recreating the Project from Scratch
-
-Follow these steps to recreate this project structure and code.
-
-### 1. Create Project Structure
-
-Create the directories:
-
+### 1. Directory Structure
+Ensure `raws/` and `reports/` directories exist at the project root:
 ```bash
-mkdir -p pccs.container.vulnerabilities/src/pccs_cvr
-cd pccs.container.vulnerabilities
+mkdir -p raws reports
+```
+
+### 2. Backend
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+# The app looks for ../raws and ../reports by default
+uvicorn src.pccs_cvr.app:app --reload --port 8000
+```
+
+### 3. Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Access the UI at `http://localhost:5173`.
+
+## Docker Build
+```bash
+# Backend
+docker build -t pccs-cvr-backend:latest ./backend
+
+# Frontend
+docker build -t pccs-cvr-frontend:latest ./frontend
+```
+
+## Deployment
+Deploy to Kubernetes using Helm:
+```bash
+helm install pccs-cvr ./charts/pccs-cvr
 ```
 
 ### 2. Create Configuration

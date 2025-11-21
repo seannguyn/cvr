@@ -12,6 +12,10 @@ license = {text = "MIT"}
 dependencies = [
     "mkdocs",
     "mkdocs-material",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "kubernetes"
 ]
 
 [project.scripts]

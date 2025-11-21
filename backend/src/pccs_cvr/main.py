@@ -1,8 +1,8 @@
 import logging
 import sys
 import csv
-import subprocess
-from typing import List, Dict
+from typing import List, Dict, Any
+from kubernetes import client, config
 
 def setup_logging():
     """Configure logging for the application."""
@@ -28,52 +28,75 @@ def fetch_wiz_container_vulnerabilities_report(filepath: str):
         logger.error(f"File not found: {filepath}")
         return []
 
-def run_kubectl_command(cmd: str) -> List[Dict[str, str]]:
-    """Runs a kubectl command and parses the custom-columns output."""
+def get_k8s_client():
+    """Loads K8s config and returns CoreV1Api client."""
     logger = logging.getLogger(__name__)
-    logger.info(f"Running command: {cmd}")
-    
     try:
-        result = subprocess.run(
-            cmd, shell=True, check=True, capture_output=True, text=True
-        )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Command failed: {e}")
-        return []
-
-    lines = result.stdout.strip().split('\n')
-    if not lines:
-        return []
-
-    # Parse headers (assuming no spaces in headers)
-    headers = lines[0].split()
-    data = []
-    
-    for line in lines[1:]:
-        # Split by whitespace. Note: This assumes values don't contain spaces.
-        # The requested columns (NAMESPACE, KIND, NAME, IMAGE, IMAGEID) usually don't.
-        parts = line.split()
-        if len(parts) != len(headers):
-            logger.warning(f"Skipping malformed line: {line}")
-            continue
-        
-        row = dict(zip(headers, parts))
-        data.append(row)
-        
-    return data
+        config.load_incluster_config()
+        logger.info("Loaded in-cluster config")
+    except config.ConfigException:
+        try:
+            config.load_kube_config()
+            logger.info("Loaded kube-config")
+        except config.ConfigException:
+            logger.error("Could not load K8s config")
+            return None
+    return client.CoreV1Api()
 
 def fetch_k8s_resources() -> List[Dict[str, str]]:
-    """Fetches K8s resources using kubectl."""
-    queries = [
-        "kubectl get pods -A -o custom-columns='NAMESPACE:.metadata.namespace,PARENT_KIND:.metadata.ownerReferences[0].kind,PARENT_NAME:.metadata.ownerReferences[0].name,IMAGE:.status.initContainerStatuses[*].image,IMAGEID:.status.initContainerStatuses[*].imageID'",
-        "kubectl get pods -A -o custom-columns='NAMESPACE:.metadata.namespace,PARENT_KIND:.metadata.ownerReferences[0].kind,PARENT_NAME:.metadata.ownerReferences[0].name,IMAGE:.status.containerStatuses[*].image,IMAGEID:.status.containerStatuses[*].imageID'"
-    ]
-    
+    """Fetches K8s resources using Kubernetes SDK."""
+    logger = logging.getLogger(__name__)
+    v1 = get_k8s_client()
+    if not v1:
+        return []
+
+    logger.info("Fetching pods from all namespaces...")
+    try:
+        pods = v1.list_pod_for_all_namespaces(watch=False)
+    except client.ApiException as e:
+        logger.error(f"Exception when calling CoreV1Api->list_pod_for_all_namespaces: {e}")
+        return []
+
     all_data = []
-    for query in queries:
-        data = run_kubectl_command(query)
-        all_data.extend(data)
+    for pod in pods.items:
+        namespace = pod.metadata.namespace
         
+        # Get parent info
+        parent_kind = "<none>"
+        parent_name = "<none>"
+        if pod.metadata.owner_references:
+            parent_kind = pod.metadata.owner_references[0].kind
+            parent_name = pod.metadata.owner_references[0].name
+            
+        # Get labels
+        labels = pod.metadata.labels if pod.metadata.labels else {}
+        labels_str = ",".join([f"{k}={v}" for k, v in labels.items()])
+
+        # Process Init Containers
+        if pod.status.init_container_statuses:
+            for status in pod.status.init_container_statuses:
+                all_data.append({
+                    'NAMESPACE': namespace,
+                    'PARENT_KIND': parent_kind,
+                    'PARENT_NAME': parent_name,
+                    'IMAGE': status.image,
+                    'IMAGEID': status.image_id,
+                    'LABELS': labels_str
+                })
+
+        # Process Containers
+        if pod.status.container_statuses:
+            for status in pod.status.container_statuses:
+                all_data.append({
+                    'NAMESPACE': namespace,
+                    'PARENT_KIND': parent_kind,
+                    'PARENT_NAME': parent_name,
+                    'IMAGE': status.image,
+                    'IMAGEID': status.image_id,
+                    'LABELS': labels_str
+                })
+                
+    logger.info(f"Fetched {len(all_data)} container records")
     return all_data
 
 def save_k8s_resouces_csv(data: List[Dict[str, str]], filepath: str):
@@ -108,34 +131,33 @@ def cleanse_k8s_resouces_csv(data: List[Dict[str, str]], filepath: str) -> List[
         namespace = row.get('NAMESPACE')
         parent_kind = row.get('PARENT_KIND')
         parent_name = row.get('PARENT_NAME')
-        images_str = row.get('IMAGE', '')
-        image_ids_str = row.get('IMAGEID', '')
+        image = row.get('IMAGE', '')
+        image_id = row.get('IMAGEID', '')
+        labels = row.get('LABELS', '')
 
         # Skip rows where image info is missing or <none>
-        if not images_str or images_str == '<none>' or not image_ids_str or image_ids_str == '<none>':
+        if not image or image == '<none>' or not image_id or image_id == '<none>':
             continue
 
-        images = images_str.split(',')
-        image_ids = image_ids_str.split(',')
-
-        if len(images) != len(image_ids):
-            logger.warning(f"Mismatch in image count for {namespace}/{parent_name}: {len(images)} images vs {len(image_ids)} IDs")
-            continue
-
-        for img, img_id in zip(images, image_ids):
-            new_row = {
-                'NAMESPACE': namespace,
-                'PARENT_KIND': parent_kind,
-                'PARENT_NAME': parent_name,
-                'IMAGE': img,
-                'IMAGEID': img_id
-            }
-            
-            # Create a tuple for uniqueness check
-            row_tuple = tuple(new_row.items())
-            if row_tuple not in seen_rows:
-                seen_rows.add(row_tuple)
-                cleansed_data.append(new_row)
+        # Note: SDK returns individual statuses, so no need to split by comma like in kubectl custom-columns
+        # However, to be safe and consistent with previous logic if any weirdness, we keep it simple.
+        # But wait, previous logic handled comma separated values because custom-columns aggregated them.
+        # My new SDK logic appends a row per container, so NO comma splitting needed for IMAGE/IMAGEID.
+        
+        new_row = {
+            'NAMESPACE': namespace,
+            'PARENT_KIND': parent_kind,
+            'PARENT_NAME': parent_name,
+            'IMAGE': image,
+            'IMAGEID': image_id,
+            'LABELS': labels
+        }
+        
+        # Create a tuple for uniqueness check
+        row_tuple = tuple(new_row.items())
+        if row_tuple not in seen_rows:
+            seen_rows.add(row_tuple)
+            cleansed_data.append(new_row)
 
     logger.info(f"Cleansing complete. Resulting records: {len(cleansed_data)}")
     
@@ -226,7 +248,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
         writer.writerows(final_rows)
     logger.info(f"Saved final CSV report to {csv_path}")
     
-    # Save Markdown
+    # Save Markdown (Optional, but kept for consistency)
     md_path = f"{output_base_path}.md"
     with open(md_path, mode='w', encoding='utf-8') as f:
         f.write("# Container Vulnerability Report\n\n")
@@ -241,46 +263,3 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
             f.write("| " + " | ".join(values) + " |\n")
             
     logger.info(f"Saved final Markdown report to {md_path}")
-
-import argparse
-from datetime import datetime
-import os
-
-def main():
-    """Main entry point of the application."""
-    setup_logging()
-    logger = logging.getLogger(__name__)
-    
-    parser = argparse.ArgumentParser(description='Generate container vulnerability report.')
-    parser.add_argument('--cluster', type=str, default='fsp02', help='Cluster name (default: fsp02)')
-    args = parser.parse_args()
-    
-    cluster_name = args.cluster
-    
-    today = datetime.now().strftime("%Y-%m-%d")
-    input_path_wiz = f'raw/{cluster_name}-{today}-wiz.csv'
-    input_path_k8s = f'raw/{cluster_name}-{today}-k8s.csv'
-    output_path_report = f'reports/{cluster_name}-{today}'
-
-    logger.info(f"Starting PCCS Container Vulnerabilities Report for cluster: {cluster_name}")
-    
-    wiz_data = fetch_wiz_container_vulnerabilities_report(input_path_wiz)
-    
-    k8s_raw_data = fetch_k8s_resources()
-    
-    # save_k8s_resouces_csv(k8s_raw_data, "raw/fsp02-k8s-raw.csv") # Optional: save raw data
-    
-    # Use the existing k8s file in raw/ for now since we are verifying backend code
-    # In a real run we would use fetch_k8s_resources() output, but here we might want to rely on the file if kubectl isn't available or if we want to use the sample data.
-    # However, the user asked to "Check that code in backend still run as expected", so I should probably use the fetched data if possible, OR just use the file if that's what the previous logic did.
-    # The previous logic called fetch_k8s_resources() AND cleanse_k8s_resouces_csv().
-    # I'll stick to the flow: fetch -> cleanse -> generate.
-    
-    k8s_cleansed_data = cleanse_k8s_resouces_csv(k8s_raw_data, input_path_k8s)
-    
-    generate_final_report(k8s_cleansed_data, wiz_data, output_path_report, cluster_name, today)
-
-    logger.info("Application finished")
-
-if __name__ == "__main__":
-    main()
