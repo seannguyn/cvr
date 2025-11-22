@@ -1,135 +1,132 @@
 # PCCS Container Vulnerability Report (CVR)
 
-A full-stack application to generate and view container vulnerability reports.
+A full-stack application to generate, view, and download container vulnerability reports by combining Kubernetes resource data with Wiz vulnerability scans.
 
 ## Architecture
--   **Backend**: FastAPI (Python)
--   **Frontend**: React (TypeScript, Vite)
--   **Infrastructure**: Kubernetes (Helm)
 
-## Prerequisites
--   Python 3.9+
--   Node.js 18+
--   Kubernetes Cluster (for deployment)
-
-## Local Development
-
-### 1. Directory Structure
-Ensure `raws/` and `reports/` directories exist at the project root:
-```bash
-mkdir -p raws reports
+```mermaid
+graph TD
+    User[User] -->|Access UI| Frontend[Frontend (React/Vite)]
+    Frontend -->|API Calls| Backend[Backend (FastAPI)]
+    Backend -->|Read/Write| Storage[Shared Storage (PVC)]
+    Backend -->|K8s API| K8s[Kubernetes Cluster]
+    
+    subgraph "Data Flow"
+        Wiz[Wiz Report (CSV)] -->|Upload| Backend
+        K8s -->|Fetch Resources| Backend
+        Backend -->|Generate| Report[Final Report (CSV/MD)]
+        Report -->|Download| User
+    end
 ```
 
-### 2. Backend
+## Backend
+
+The backend is a FastAPI application responsible for data processing and report generation.
+
+### Key Components
+- **`main.py`**: Core logic for fetching K8s resources, cleansing data, and merging with Wiz reports.
+- **`app.py`**: API endpoints for file upload, report generation, and download.
+- **`data_cvr/`**: Directory for storing raw inputs (`raws/`) and generated reports (`reports/`).
+
+### Workflows
+1.  **Upload**: User uploads a Wiz CSV report via `/upload`.
+2.  **Generate**: User triggers generation via `/cvr`. Backend fetches K8s data, merges it with the uploaded Wiz report, and saves the result.
+3.  **Download**: User downloads the report via `/download/{date}`. A zip file is created on-the-fly containing CSV and MD formats.
+
+### Local Development
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-# The app looks for ../raws and ../reports by default
 uvicorn src.pccs_cvr.app:app --reload --port 8000
 ```
 
-### 3. Frontend
+### Testing
+Run unit tests using `pytest`:
+```bash
+pytest tests
+```
+
+### Docker Build
+```bash
+docker build -t pccs-cvr-backend:latest ./backend
+```
+
+## Frontend
+
+The frontend is a React application built with Vite and Material UI.
+
+### Key Components
+- **`App.tsx`**: Main component handling UI layout, state, and API interactions.
+- **`api.ts`**: Axios client for backend communication.
+- **`config.js`**: Runtime configuration for environment variables (e.g., `clusterName`).
+
+### Features
+- **Upload**: Upload Wiz CSV reports.
+- **Date Selection**: View reports for specific dates.
+- **Data Table**: Sortable, filterable table with search highlighting and severity chips.
+- **CMDB Display**: Formatted display of CMDB tags with bolding.
+- **Download**: Download reports as a zip file.
+
+### Local Development
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Access at `http://localhost:5173`.
 
-Access the UI at `http://localhost:5173`.
-
-## Docker Build
+### Docker Build
 ```bash
-# Backend
-docker build -t pccs-cvr-backend:latest ./backend
-
-# Frontend
 docker build -t pccs-cvr-frontend:latest ./frontend
 ```
 
-## Deployment
-Deploy to Kubernetes using Helm:
+## Helm Charts
+
+Deploy the application to a Kubernetes cluster using Helm.
+
+### Deployment
 ```bash
-helm install pccs-cvr ./charts/pccs-cvr
+helm install pccs-cvr ./charts/pccs-cvr --set clusterName="MyCluster"
 ```
 
-### 2. Create Configuration
+### Configuration
+- **`clusterName`**: Name of the cluster (displayed in UI and filenames).
+- **`storage.size`**: Size of the PVC (default `1Gi`).
 
-Create `pyproject.toml` in the root:
-
-```toml
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "pccs-cvr"
-version = "0.1.0"
-description = "PCCS CVR"
-authors = [{ name = "PCSS" }]
-requires-python = ">=3.9"
-license={"text="MIT"}
-
-[project.scripts]
-pccs-cvr = "pccs_cvr.main:main"
-```
-
-### 3. Create Source Code
-
-Create `src/pccs_cvr/__init__.py` (empty file):
-
+### Access
+The frontend service type is `LoadBalancer` by default. Get the external IP:
 ```bash
-touch src/pccs_cvr/__init__.py
+kubectl get svc pccs-cvr-frontend
 ```
 
-Create `src/pccs_cvr/main.py`:
+## End-to-End Testing Scenarios
 
-```python
-import logging
-import sys
+### Scenario 1: Generate New Report
+1.  Open the UI.
+2.  Click "Upload Today's Wiz Report" and select a valid Wiz CSV.
+3.  Verify the success message "Wiz report uploaded successfully!".
+4.  Select today's date in the Date Picker.
+5.  Verify the report generates and displays in the table.
+6.  Check that "CMDB" column is populated and formatted correctly.
 
-def setup_logging():
-    """Configure logging for the application."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
+### Scenario 2: Download Report
+1.  Select a date with an existing report.
+2.  Click the "Download" button in the header.
+3.  Verify a zip file is downloaded.
+4.  Unzip and verify it contains both CSV and MD files.
+5.  **Check Filename**:
+    - If today: `cluster-cvr-YYYY-MM-DD-HH-MM-SS.zip`
+    - If past: `cluster-cvr-YYYY-MM-DD.zip`
 
-def main():
-    """Main entry point of the application."""
-    setup_logging()
-    logger = logging.getLogger(__name__)
-    
-    logger.info("Starting application")
-    print("Hello World")
-    logger.info("Application finished")
+### Scenario 3: Column Visibility & Filtering
+1.  Click the "View Columns" icon.
+2.  Toggle "Scan Date" and verify it appears/disappears.
+3.  Type in the global search box. Verify matching text is highlighted in yellow.
+4.  Type in a column filter. Verify rows are filtered.
 
-if __name__ == "__main__":
-    main()
-```
-
-### 4. Setup and Run
-
-Create a virtual environment, install the package, and run it:
-
-```bash
-# Create virtual environment
-python3 -m venv .venv
-
-# Activate it
-source .venv/bin/activate
-
-python3 -m pip install --upgrade pip
-
-pip list
-
-# Install the package in editable mode
-pip install -e .
-
-# Run the application
-pccs-cvr
-```
+### Scenario 4: Runtime Configuration
+1.  Deploy with `--set clusterName="ProdCluster"`.
+2.  Open UI.
+3.  Verify header shows "Container Vulnerability Report: ProdCluster".
