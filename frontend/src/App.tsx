@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Container, Typography, Box, Paper, Alert, Chip, Stack, Link, Menu, MenuItem, Checkbox, FormControlLabel } from '@mui/material';
+import { Container, Typography, Box, Paper, Alert, Chip, Stack, Link, Menu, MenuItem, Checkbox, FormControlLabel, Divider, Tooltip } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -68,40 +68,26 @@ const CVERenderer = ({ value }: { value: string }) => {
   );
 };
 
+const SEVERITY_COLORS = {
+  Critical: { bg: '#ffebee', text: '#d32f2f' },
+  High: { bg: '#fff3e0', text: '#ed6c02' },
+  Medium: { bg: '#ffe9aeff', text: '#a59700ff' },
+  Low: { bg: '#f5f5f5', text: '#616161' },
+};
+
 // Severity Chip Renderer
 const SeverityRenderer = ({ value }: { value: string }) => {
   if (!value) return null;
 
-  let bgcolor = '#e0e0e0';
-  let textcolor = '#000';
+  const colors = SEVERITY_COLORS[value as keyof typeof SEVERITY_COLORS] || { bg: '#e0e0e0', text: '#000' };
 
-  switch (value) {
-    case 'Critical':
-      bgcolor = '#ffebee'; // Light red
-      textcolor = '#d32f2f';
-      break;
-    case 'High':
-      bgcolor = '#fff3e0'; // Light orange
-      textcolor = '#ed6c02';
-      break;
-    case 'Medium':
-      bgcolor = '#ffe9aeff'; // Light yellow
-      textcolor = '#a59700ff'; // Yellow
-      break;
-    case 'Low':
-      bgcolor = '#f5f5f5'; // Light gray
-      textcolor = '#616161';
-      break;
-  }
-
-  // If using standard chips, we can use color prop. But for specific "light background same color", custom sx is better.
   return (
     <Chip
       label={value}
       size="small"
       sx={{
-        bgcolor: bgcolor,
-        color: textcolor,
+        bgcolor: colors.bg,
+        color: colors.text,
         fontWeight: 'bold'
       }}
     />
@@ -261,16 +247,10 @@ function App() {
         setLoading(true);
         await uploadReport(event.target.files[0]);
         setMessage({ type: 'success', text: 'Wiz report uploaded successfully!' });
-        // Refresh dates
-        const res = await getAvailableDates();
-        const dates = res.data.dates;
-        setAvailableDates(dates);
 
-        // If uploaded today's report, auto select today
         const today = dayjs().format('YYYY-MM-DD');
-        if (dates.includes(today)) {
-          setSelectedDate(dayjs(today));
-        }
+        setAvailableDates(prev => [...prev, today]);
+        setSelectedDate(dayjs(today));
 
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to upload report.' });
@@ -397,8 +377,9 @@ function App() {
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Container maxWidth={false} sx={{ mt: 4, px: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Container Vulnerability Report: {clusterName}
+        <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <img src="/logo.png" alt="Logo" style={{ height: '50px' }} />
+          Container Vulnerability Report (CVR): {clusterName}
         </Typography>
 
         <Paper sx={{ p: 3, mb: 3 }}>
@@ -408,12 +389,18 @@ function App() {
               <input hidden accept=".csv" type="file" onChange={handleUpload} />
             </Button>
 
-            <DatePicker
-              label="Select Date"
-              value={selectedDate}
-              onChange={(newValue) => setSelectedDate(newValue)}
-              shouldDisableDate={isDateDisabled}
-            />
+            <Tooltip title={<div style={{ whiteSpace: 'pre-line' }}>Container Vulnerability Report{'\n'}is only available for current month</div>} arrow>
+              <div>
+                <DatePicker
+                  label="Select Date"
+                  value={selectedDate}
+                  onChange={(newValue) => setSelectedDate(newValue)}
+                  shouldDisableDate={isDateDisabled}
+                  minDate={dayjs().startOf('month')}
+                  maxDate={dayjs().endOf('month')}
+                />
+              </div>
+            </Tooltip>
             {/* Generate button removed as per requirement */}
           </Box>
 
@@ -454,11 +441,10 @@ function App() {
                 </Button>
               </Typography>
               <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="subtitle1">with:</Typography>
-                <Typography>{counts.Critical}</Typography><SeverityRenderer value="Critical" />
-                <Typography>{counts.High}</Typography><SeverityRenderer value="High" />
-                <Typography>{counts.Medium}</Typography><SeverityRenderer value="Medium" />
-                <Typography>{counts.Low}</Typography><SeverityRenderer value="Low" />
+                <Typography sx={{ color: SEVERITY_COLORS.Critical.text, fontWeight: 'bold' }}>{counts.Critical}</Typography><SeverityRenderer value="Critical" />
+                <Typography sx={{ color: SEVERITY_COLORS.High.text, fontWeight: 'bold' }}>{counts.High}</Typography><SeverityRenderer value="High" />
+                <Typography sx={{ color: SEVERITY_COLORS.Medium.text, fontWeight: 'bold' }}>{counts.Medium}</Typography><SeverityRenderer value="Medium" />
+                <Typography sx={{ color: SEVERITY_COLORS.Low.text, fontWeight: 'bold' }}>{counts.Low}</Typography><SeverityRenderer value="Low" />
               </Stack>
             </Box>
 
@@ -505,6 +491,19 @@ function App() {
                       </MenuItem>
                     )
                   })}
+                  <Divider />
+                  <MenuItem dense>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={table.getIsAllColumnsVisible()}
+                          indeterminate={table.getIsSomeColumnsVisible() && !table.getIsAllColumnsVisible()}
+                          onChange={table.getToggleAllColumnsVisibilityHandler()}
+                        />
+                      }
+                      label="Show/Hide All"
+                    />
+                  </MenuItem>
                 </Menu>
 
                 <TablePagination

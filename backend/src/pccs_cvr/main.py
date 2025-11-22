@@ -273,6 +273,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
     with open(md_path, mode='w', encoding='utf-8') as f:
         f.write("# Container Vulnerability Report\n\n")
         
+        f.write("| " + " | ".join(keys) + " |\n")
         f.write("| " + " | ".join(["---"] * len(keys)) + " |\n")
         
         # Write rows
