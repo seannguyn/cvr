@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Container, Typography, Box, Paper, Alert, CircularProgress, Chip, Stack } from '@mui/material';
+import { Container, Typography, Box, Paper, Alert, Chip, Stack, Link } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { Dayjs } from 'dayjs';
+import dayjs, { Dayjs } from 'dayjs';
 import { uploadReport, generateReport, getReport, getAvailableDates } from './api';
 import Papa from 'papaparse';
 import {
@@ -15,7 +15,7 @@ import {
   flexRender,
   createColumnHelper,
 } from '@tanstack/react-table';
-import { Button, TextField } from '@mui/material';
+import { Button, TextField, TablePagination } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
@@ -27,6 +27,7 @@ interface ReportRow {
   Severity: string;
   CVEs: string;
   'Scan Date': string;
+  Labels: string;
   Namespace: string;
   ParentKind: string;
   ParentName: string;
@@ -123,6 +124,23 @@ const HighlightCell = ({ value, filter }: { value: string, filter: string }) => 
   );
 };
 
+// Column Filter Component
+const Filter = ({ column }: { column: any, table: any }) => {
+  const columnFilterValue = column.getFilterValue();
+
+  return (
+    <TextField
+      variant="standard"
+      size="small"
+      value={(columnFilterValue ?? '') as string}
+      onChange={e => column.setFilterValue(e.target.value)}
+      placeholder={`Filter...`}
+      onClick={e => e.stopPropagation()}
+      sx={{ mt: 1, width: '100%' }}
+    />
+  );
+};
+
 
 function App() {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
@@ -139,13 +157,62 @@ function App() {
     const fetchDates = async () => {
       try {
         const res = await getAvailableDates();
-        setAvailableDates(res.data.dates);
+        const dates = res.data.dates;
+        setAvailableDates(dates);
+
+        // Auto-select today if available
+        const today = dayjs().format('YYYY-MM-DD');
+        if (dates.includes(today)) {
+          setSelectedDate(dayjs(today));
+        }
       } catch (e) {
         console.error("Failed to fetch dates", e);
       }
     };
     fetchDates();
   }, []);
+
+  // Effect to generate/fetch report when date is selected
+  useEffect(() => {
+    const fetchReport = async () => {
+      if (!selectedDate) {
+        setData([]);
+        return;
+      }
+
+      const dateStr = selectedDate.format('YYYY-MM-DD');
+      try {
+        setLoading(true);
+        setMessage(null);
+
+        // Check if we need to generate it first (if it's today and not generated yet?
+        // The requirement says "if there is report for today, date picker auto pick today's date, and display TanStack CVE table"
+        // But if we just uploaded, we might need to generate.
+        // Let's try to generate, backend handles "if exists return it".
+        await generateReport(dateStr);
+
+        // Fetch the generated report
+        const response = await getReport(dateStr);
+        const text = await response.data.text();
+
+        Papa.parse<ReportRow>(text, {
+          header: true,
+          skipEmptyLines: true, // Important to avoid empty rows
+          complete: (results) => {
+            setData(results.data);
+            setMessage({ type: 'success', text: `Abracadabra! Report generated successfully for date: ${dateStr}!` });
+          },
+        });
+      } catch (error) {
+        setMessage({ type: 'error', text: 'Looks like our bot is on sick leave today. Please try again, or contact PCCS.' });
+        setData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReport();
+  }, [selectedDate]);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -155,7 +222,15 @@ function App() {
         setMessage({ type: 'success', text: 'Wiz report uploaded successfully!' });
         // Refresh dates
         const res = await getAvailableDates();
-        setAvailableDates(res.data.dates);
+        const dates = res.data.dates;
+        setAvailableDates(dates);
+
+        // If uploaded today's report, auto select today
+        const today = dayjs().format('YYYY-MM-DD');
+        if (dates.includes(today)) {
+          setSelectedDate(dayjs(today));
+        }
+
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to upload report.' });
       } finally {
@@ -164,61 +239,51 @@ function App() {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!selectedDate) return;
-    const dateStr = selectedDate.format('YYYY-MM-DD');
-    try {
-      setLoading(true);
-      setMessage(null);
-      await generateReport(dateStr);
-
-      // Fetch the generated report
-      const response = await getReport(dateStr);
-      const text = await response.data.text();
-
-      Papa.parse<ReportRow>(text, {
-        header: true,
-        skipEmptyLines: true, // Important to avoid empty rows
-        complete: (results) => {
-          setData(results.data);
-          setMessage({ type: 'success', text: `Abracadabra! Report generated successfully for date: ${dateStr}!` });
-        },
-      });
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Looks like our bot is on sick leave today. Please try again, or contact PCCS.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const columnHelper = createColumnHelper<ReportRow>();
 
   const columns = useMemo(() => [
     columnHelper.accessor('Image', {
       header: 'Image',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />
+      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      enableColumnFilter: true,
     }),
     columnHelper.accessor('AssetName', {
       header: 'Asset Name',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />
+      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      enableColumnFilter: true,
     }),
     columnHelper.accessor('Severity', {
       header: 'Severity',
-      cell: info => <SeverityRenderer value={info.getValue()} />
+      cell: info => <SeverityRenderer value={info.getValue()} />,
+      enableColumnFilter: true,
     }),
     columnHelper.accessor('CVEs', {
       header: 'CVEs',
-      cell: info => <CVERenderer value={info.getValue()} />
+      cell: info => <CVERenderer value={info.getValue()} />,
+      enableColumnFilter: true,
     }),
-    columnHelper.accessor('Scan Date', { header: 'Scan Date' }),
+    columnHelper.accessor('Scan Date', {
+      header: 'Scan Date',
+      enableColumnFilter: true,
+    }),
+    columnHelper.accessor('Labels', {
+      header: 'Labels',
+      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      enableColumnFilter: true,
+    }),
     columnHelper.accessor('Namespace', {
       header: 'Namespace',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />
+      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      enableColumnFilter: true,
     }),
-    columnHelper.accessor('ParentKind', { header: 'Kind' }),
+    columnHelper.accessor('ParentKind', {
+      header: 'Kind',
+      enableColumnFilter: true,
+    }),
     columnHelper.accessor('ParentName', {
       header: 'Name',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />
+      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      enableColumnFilter: true,
     }),
   ], [globalFilter]);
 
@@ -227,6 +292,11 @@ function App() {
     columns,
     state: {
       globalFilter,
+    },
+    initialState: {
+      pagination: {
+        pageSize: 100,
+      }
     },
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
@@ -240,7 +310,9 @@ function App() {
     const c = { Critical: 0, High: 0, Medium: 0, Low: 0 };
     data.forEach(row => {
       if (row.Severity in c) {
-        c[row.Severity as keyof typeof c]++;
+        // Count number of CVEs in this row (split by comma)
+        const cveCount = row.CVEs ? row.CVEs.split(', ').length : 0;
+        c[row.Severity as keyof typeof c] += cveCount;
       }
     });
     return c;
@@ -270,15 +342,7 @@ function App() {
               onChange={(newValue) => setSelectedDate(newValue)}
               shouldDisableDate={isDateDisabled}
             />
-
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={handleGenerate}
-              disabled={loading || !selectedDate}
-            >
-              {loading ? <CircularProgress size={24} /> : 'Generate Report'}
-            </Button>
+            {/* Generate button removed as per requirement */}
           </Box>
 
           {message && (
@@ -288,6 +352,20 @@ function App() {
           )}
         </Paper>
 
+        {data.length === 0 && !loading && (
+          <Paper sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h6" gutterBottom>
+              Upload Today's wiz report to view today's live CVEs.
+            </Typography>
+            <Typography variant="body1" gutterBottom>
+              Instructions to export Wiz Container Vulnerabilities report is <Link href="https://app.wiz.io" target="_blank" rel="noopener">here</Link>.
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              View previous reports by select date in the past.
+            </Typography>
+          </Paper>
+        )}
+
         {data.length > 0 && (
           <Paper sx={{ p: 3 }}>
             <Box sx={{ mb: 2 }}>
@@ -295,7 +373,6 @@ function App() {
                 Container Vulnerabilities Report <b>{selectedDate?.format('YYYY-MM-DD')}</b>
               </Typography>
               <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="subtitle1">with:</Typography>
                 <Typography>{counts.Critical}</Typography><SeverityRenderer value="Critical" />
                 <Typography>{counts.High}</Typography><SeverityRenderer value="High" />
                 <Typography>{counts.Medium}</Typography><SeverityRenderer value="Medium" />
@@ -303,14 +380,28 @@ function App() {
               </Stack>
             </Box>
 
-            <TextField
-              value={globalFilter ?? ''}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              placeholder="Search all columns..."
-              variant="outlined"
-              fullWidth
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <TextField
+                value={globalFilter ?? ''}
+                onChange={(e) => setGlobalFilter(e.target.value)}
+                placeholder="Search all columns..."
+                variant="outlined"
+                size="small"
+                sx={{ width: '300px' }}
+              />
+
+              <TablePagination
+                component="div"
+                count={table.getFilteredRowModel().rows.length}
+                page={table.getState().pagination.pageIndex}
+                onPageChange={(_, newPage) => table.setPageIndex(newPage)}
+                rowsPerPage={table.getState().pagination.pageSize}
+                onRowsPerPageChange={(e) => table.setPageSize(Number(e.target.value))}
+                rowsPerPageOptions={[10, 20, 50, 100]}
+                showFirstButton
+                showLastButton
+              />
+            </Box>
 
             <Box sx={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -324,18 +415,28 @@ function App() {
                             padding: '10px',
                             borderBottom: '1px solid #ddd',
                             textAlign: 'left',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
+                            verticalAlign: 'top',
                           }}
-                          onClick={header.column.getToggleSortingHandler()}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Box
+                            onClick={header.column.getToggleSortingHandler()}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.5,
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
                             {flexRender(header.column.columnDef.header, header.getContext())}
                             {{
                               asc: <ArrowUpwardIcon fontSize="small" />,
                               desc: <ArrowDownwardIcon fontSize="small" />,
                             }[header.column.getIsSorted() as string] ?? <UnfoldMoreIcon fontSize="small" color="action" />}
                           </Box>
+                          {header.column.getCanFilter() ? (
+                            <Filter column={header.column} table={table} />
+                          ) : null}
                         </th>
                       ))}
                     </tr>
@@ -355,41 +456,17 @@ function App() {
               </table>
             </Box>
 
-            <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center', alignItems: 'center' }}>
-              <Button
-                variant="outlined"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                Previous
-              </Button>
-              <Typography sx={{ alignSelf: 'center' }}>
-                Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-              </Typography>
-              <Button
-                variant="outlined"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                Next
-              </Button>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography>Show:</Typography>
-                <select
-                  value={table.getState().pagination.pageSize}
-                  onChange={e => {
-                    table.setPageSize(Number(e.target.value))
-                  }}
-                  style={{ padding: '5px', borderRadius: '4px' }}
-                >
-                  {[10, 20, 50, 100].map(pageSize => (
-                    <option key={pageSize} value={pageSize}>
-                      {pageSize}
-                    </option>
-                  ))}
-                </select>
-              </Box>
-            </Box>
+            <TablePagination
+              component="div"
+              count={table.getFilteredRowModel().rows.length}
+              page={table.getState().pagination.pageIndex}
+              onPageChange={(_, newPage) => table.setPageIndex(newPage)}
+              rowsPerPage={table.getState().pagination.pageSize}
+              onRowsPerPageChange={(e) => table.setPageSize(Number(e.target.value))}
+              rowsPerPageOptions={[10, 20, 50, 100]}
+              showFirstButton
+              showLastButton
+            />
           </Paper>
         )}
       </Container>

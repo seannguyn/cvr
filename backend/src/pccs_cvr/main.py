@@ -200,7 +200,8 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
                     k8s_row.get('PARENT_NAME'),
                     k8s_row.get('IMAGE'),
                     wiz_row.get('AssetName'),
-                    wiz_row.get('Severity')
+                    wiz_row.get('Severity'),
+                    k8s_row.get('LABELS', '')
                 )
                 
                 if key not in grouped_data:
@@ -212,7 +213,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
                 grouped_data[key].add((cve_name, cve_link))
 
     # Convert grouped data to list of dicts with CamelCase keys
-    # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName
+    # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName, Labels
     final_rows = []
     for key, cves in grouped_data.items():
         # Sort CVEs by name
@@ -234,7 +235,8 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
             'Scan Date': scan_date,
             'Namespace': key[0],
             'ParentKind': key[1],
-            'ParentName': key[2]
+            'ParentName': key[2],
+            'Labels': key[6]
         }
         final_rows.append(row)
 
@@ -253,7 +255,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
 
     # Save CSV
     csv_path = f"{output_base_path}.csv"
-    keys = ['Image', 'AssetName', 'Severity', 'CVEs', 'Scan Date', 'Namespace', 'ParentKind', 'ParentName']
+    keys = ['Image', 'AssetName', 'Severity', 'CVEs', 'Scan Date', 'Labels', 'Namespace', 'ParentKind', 'ParentName']
     with open(csv_path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=keys)
         writer.writeheader()
