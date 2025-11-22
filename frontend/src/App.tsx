@@ -237,6 +237,11 @@ function App() {
         Papa.parse<ReportRow>(text, {
           header: true,
           skipEmptyLines: true, // Important to avoid empty rows
+          transformHeader: (header) => {
+            const h = header.trim();
+            if (h.toUpperCase().includes('CMDB')) return 'CMDB';
+            return h;
+          }, // Handle potential CRLF issues and Firefox quirks
           complete: (results) => {
             setData(results.data);
             setMessage({ type: 'success', text: `Abracadabra! Report generated successfully for date: ${dateStr}!` });
@@ -312,6 +317,7 @@ function App() {
     }),
     columnHelper.accessor('ParentKind', {
       header: 'Kind',
+      cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
       enableColumnFilter: true,
     }),
     columnHelper.accessor('ParentName', {
