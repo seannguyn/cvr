@@ -12,6 +12,7 @@ spec:
       labels:
         app: {{ .Release.Name }}-backend
     spec:
+      serviceAccountName: {{ .Release.Name }}-backend
       containers:
         - name: backend
           image: {{ .Values.backend.image }}

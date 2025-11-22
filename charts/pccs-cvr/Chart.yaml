@@ -1,6 +1,6 @@
 apiVersion: v2
 name: pccs-cvr
-description: A Helm chart for PCCS Container Vulnerability Report App
+description: A Helm chart for PCCS Container Vulnerability Report
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

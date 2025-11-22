@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Container, Typography, Box, Paper, Alert, Chip, Stack, Link } from '@mui/material';
+import { Container, Typography, Box, Paper, Alert, Chip, Stack, Link, Menu, MenuItem, Checkbox, FormControlLabel } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -14,11 +14,13 @@ import {
   getSortedRowModel,
   flexRender,
   createColumnHelper,
+  VisibilityState,
 } from '@tanstack/react-table';
 import { Button, TextField, TablePagination } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
+import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 
 // Define the shape of our data
 interface ReportRow {
@@ -27,10 +29,10 @@ interface ReportRow {
   Severity: string;
   CVEs: string;
   'Scan Date': string;
-  Labels: string;
   Namespace: string;
   ParentKind: string;
   ParentName: string;
+  CMDB: string;
 }
 
 // Helper to parse markdown links [Name](Link)
@@ -83,7 +85,7 @@ const SeverityRenderer = ({ value }: { value: string }) => {
       break;
     case 'Medium':
       bgcolor = '#ffe9aeff'; // Light yellow
-      textcolor = '#827704ff'; // Yellow
+      textcolor = '#a59700ff'; // Yellow
       break;
     case 'Low':
       bgcolor = '#f5f5f5'; // Light gray
@@ -106,21 +108,44 @@ const SeverityRenderer = ({ value }: { value: string }) => {
 };
 
 // Highlight Renderer
-const HighlightCell = ({ value, filter }: { value: string, filter: string }) => {
+const HighlightCell = ({ value, filter, globalFilter }: { value: string, filter?: string, globalFilter?: string }) => {
   if (!value) return null;
-  if (!filter) return <span>{value}</span>;
 
-  const parts = value.split(new RegExp(`(${filter})`, 'gi'));
+  const filters = [filter, globalFilter].filter(f => f && f.trim() !== '');
+
+  if (filters.length === 0) return <span>{value}</span>;
+
+  // Escape special regex characters in filters to avoid crashes
+  const escapedFilters = filters.map(f => f?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = `(${escapedFilters.join('|')})`;
+
+  const parts = value.split(new RegExp(pattern, 'gi'));
   return (
     <span>
-      {parts.map((part, i) =>
-        part.toLowerCase() === filter.toLowerCase() ? (
+      {parts.map((part, i) => {
+        const isMatch = filters.some(f => part.toLowerCase() === f?.toLowerCase());
+        return isMatch ? (
           <span key={i} style={{ backgroundColor: '#ffeb3b' }}>{part}</span>
         ) : (
           part
-        )
-      )}
+        );
+      })}
     </span>
+  );
+};
+
+// CMDB Renderer
+const CMDBRenderer = ({ value, filter, globalFilter }: { value: string, filter?: string, globalFilter?: string }) => {
+  if (!value) return null;
+  const items = value.split(',');
+  return (
+    <Box>
+      {items.map((item, i) => (
+        <div key={i}>
+          <HighlightCell value={item} filter={filter} globalFilter={globalFilter} />
+        </div>
+      ))}
+    </Box>
   );
 };
 
@@ -149,6 +174,20 @@ function App() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [data, setData] = useState<ReportRow[]>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    'Scan Date': false, // Hide Scan Date by default
+  });
+
+  // Column Visibility Menu State
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
 
   // Environment variable for Cluster Name (Vite uses import.meta.env)
   const clusterName = import.meta.env.VITE_CLUSTER_NAME || 'UNKNOWN_CLUSTER';
@@ -244,12 +283,12 @@ function App() {
   const columns = useMemo(() => [
     columnHelper.accessor('Image', {
       header: 'Image',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
       enableColumnFilter: true,
     }),
     columnHelper.accessor('AssetName', {
       header: 'Asset Name',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
       enableColumnFilter: true,
     }),
     columnHelper.accessor('Severity', {
@@ -266,14 +305,9 @@ function App() {
       header: 'Scan Date',
       enableColumnFilter: true,
     }),
-    columnHelper.accessor('Labels', {
-      header: 'Labels',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
-      enableColumnFilter: true,
-    }),
     columnHelper.accessor('Namespace', {
       header: 'Namespace',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
       enableColumnFilter: true,
     }),
     columnHelper.accessor('ParentKind', {
@@ -282,7 +316,12 @@ function App() {
     }),
     columnHelper.accessor('ParentName', {
       header: 'Name',
-      cell: info => <HighlightCell value={info.getValue()} filter={globalFilter} />,
+      cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
+      enableColumnFilter: true,
+    }),
+    columnHelper.accessor('CMDB', {
+      header: 'CMDB',
+      cell: info => <CMDBRenderer value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
       enableColumnFilter: true,
     }),
   ], [globalFilter]);
@@ -292,6 +331,7 @@ function App() {
     columns,
     state: {
       globalFilter,
+      columnVisibility,
     },
     initialState: {
       pagination: {
@@ -299,6 +339,7 @@ function App() {
       }
     },
     onGlobalFilterChange: setGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -324,7 +365,7 @@ function App() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Container maxWidth="xl" sx={{ mt: 4 }}>
+      <Container maxWidth={false} sx={{ mt: 4, px: 4 }}>
         <Typography variant="h4" gutterBottom>
           Container Vulnerability Report: {clusterName}
         </Typography>
@@ -373,6 +414,7 @@ function App() {
                 Container Vulnerabilities Report <b>{selectedDate?.format('YYYY-MM-DD')}</b>
               </Typography>
               <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="subtitle1">with:</Typography>
                 <Typography>{counts.Critical}</Typography><SeverityRenderer value="Critical" />
                 <Typography>{counts.High}</Typography><SeverityRenderer value="High" />
                 <Typography>{counts.Medium}</Typography><SeverityRenderer value="Medium" />
@@ -387,20 +429,57 @@ function App() {
                 placeholder="Search all columns..."
                 variant="outlined"
                 size="small"
-                sx={{ width: '300px' }}
+                sx={{ width: '600px' }}
               />
 
-              <TablePagination
-                component="div"
-                count={table.getFilteredRowModel().rows.length}
-                page={table.getState().pagination.pageIndex}
-                onPageChange={(_, newPage) => table.setPageIndex(newPage)}
-                rowsPerPage={table.getState().pagination.pageSize}
-                onRowsPerPageChange={(e) => table.setPageSize(Number(e.target.value))}
-                rowsPerPageOptions={[10, 20, 50, 100]}
-                showFirstButton
-                showLastButton
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Button
+                  onClick={handleClick}
+                  startIcon={<ViewColumnIcon />}
+                  variant="outlined"
+                  size="medium"
+                >
+                  Columns
+                </Button>
+                <Menu
+                  id="column-menu"
+                  anchorEl={anchorEl}
+                  open={open}
+                  onClose={handleClose}
+                  MenuListProps={{
+                    'aria-labelledby': 'basic-button',
+                  }}
+                >
+                  {table.getAllLeafColumns().map(column => {
+                    return (
+                      <MenuItem key={column.id} dense>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={column.getIsVisible()}
+                              onChange={column.getToggleVisibilityHandler()}
+                            />
+                          }
+                          label={column.columnDef.header as string}
+                        />
+                      </MenuItem>
+                    )
+                  })}
+                </Menu>
+
+                <TablePagination
+                  component="div"
+                  count={table.getFilteredRowModel().rows.length}
+                  page={table.getState().pagination.pageIndex}
+                  onPageChange={(_, newPage) => table.setPageIndex(newPage)}
+                  rowsPerPage={table.getState().pagination.pageSize}
+                  onRowsPerPageChange={(e) => table.setPageSize(Number(e.target.value))}
+                  rowsPerPageOptions={[10, 20, 50, 100]}
+                  showFirstButton
+                  showLastButton
+                  sx={{ border: 'none' }}
+                />
+              </Box>
             </Box>
 
             <Box sx={{ overflowX: 'auto' }}>

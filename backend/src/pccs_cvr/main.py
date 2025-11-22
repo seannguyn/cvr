@@ -70,7 +70,9 @@ def fetch_k8s_resources() -> List[Dict[str, str]]:
             
         # Get labels
         labels = pod.metadata.labels if pod.metadata.labels else {}
-        labels_str = ",".join([f"{k}={v}" for k, v in labels.items()])
+        # Filter for labels containing "cmdb" (case-insensitive)
+        cmdb_labels = [f"{k}={v}" for k, v in labels.items() if "cmdb" in k.lower()]
+        labels_str = ",".join(cmdb_labels) if cmdb_labels else "NONE"
 
         # Process Init Containers
         if pod.status.init_container_statuses:
@@ -81,7 +83,7 @@ def fetch_k8s_resources() -> List[Dict[str, str]]:
                     'PARENT_NAME': parent_name,
                     'IMAGE': status.image,
                     'IMAGEID': status.image_id,
-                    'LABELS': labels_str
+                    'CMDB': labels_str
                 })
 
         # Process Containers
@@ -93,7 +95,7 @@ def fetch_k8s_resources() -> List[Dict[str, str]]:
                     'PARENT_NAME': parent_name,
                     'IMAGE': status.image,
                     'IMAGEID': status.image_id,
-                    'LABELS': labels_str
+                    'CMDB': labels_str
                 })
                 
     logger.info(f"Fetched {len(all_data)} container records")
@@ -133,7 +135,7 @@ def cleanse_k8s_resouces_csv(data: List[Dict[str, str]], filepath: str) -> List[
         parent_name = row.get('PARENT_NAME')
         image = row.get('IMAGE', '')
         image_id = row.get('IMAGEID', '')
-        labels = row.get('LABELS', '')
+        cmdb = row.get('CMDB', '')
 
         # Skip rows where image info is missing or <none>
         if not image or image == '<none>' or not image_id or image_id == '<none>':
@@ -150,7 +152,7 @@ def cleanse_k8s_resouces_csv(data: List[Dict[str, str]], filepath: str) -> List[
             'PARENT_NAME': parent_name,
             'IMAGE': image,
             'IMAGEID': image_id,
-            'LABELS': labels
+            'CMDB': cmdb
         }
         
         # Create a tuple for uniqueness check
@@ -201,7 +203,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
                     k8s_row.get('IMAGE'),
                     wiz_row.get('AssetName'),
                     wiz_row.get('Severity'),
-                    k8s_row.get('LABELS', '')
+                    k8s_row.get('CMDB', '')
                 )
                 
                 if key not in grouped_data:
@@ -213,7 +215,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
                 grouped_data[key].add((cve_name, cve_link))
 
     # Convert grouped data to list of dicts with CamelCase keys
-    # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName, Labels
+    # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName, CMDB
     final_rows = []
     for key, cves in grouped_data.items():
         # Sort CVEs by name
@@ -236,7 +238,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
             'Namespace': key[0],
             'ParentKind': key[1],
             'ParentName': key[2],
-            'Labels': key[6]
+            'CMDB': key[6]
         }
         final_rows.append(row)
 
@@ -255,7 +257,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
 
     # Save CSV
     csv_path = f"{output_base_path}.csv"
-    keys = ['Image', 'AssetName', 'Severity', 'CVEs', 'Scan Date', 'Labels', 'Namespace', 'ParentKind', 'ParentName']
+    keys = ['Image', 'AssetName', 'Severity', 'CVEs', 'Scan Date', 'Namespace', 'ParentKind', 'ParentName', 'CMDB']
     with open(csv_path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=keys)
         writer.writeheader()
