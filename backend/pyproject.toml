@@ -13,7 +13,9 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "python-multipart",
-    "kubernetes"
+    "kubernetes",
+    "pytest",
+    "httpx"
 ]
 
 [project.scripts]
