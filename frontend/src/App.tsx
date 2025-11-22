@@ -237,11 +237,7 @@ function App() {
         Papa.parse<ReportRow>(text, {
           header: true,
           skipEmptyLines: true, // Important to avoid empty rows
-          transformHeader: (header) => {
-            const h = header.trim();
-            if (h.toUpperCase().includes('CMDB')) return 'CMDB';
-            return h;
-          }, // Handle potential CRLF issues and Firefox quirks
+          transformHeader: (header) => header.trim(), // Handle potential CRLF issues
           complete: (results) => {
             setData(results.data);
             setMessage({ type: 'success', text: `Abracadabra! Report generated successfully for date: ${dateStr}!` });
@@ -310,6 +306,11 @@ function App() {
       header: 'Scan Date',
       enableColumnFilter: true,
     }),
+    columnHelper.accessor('CMDB', {
+      header: 'CMDB',
+      cell: info => <CMDBRenderer value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
+      enableColumnFilter: true,
+    }),
     columnHelper.accessor('Namespace', {
       header: 'Namespace',
       cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
@@ -323,11 +324,6 @@ function App() {
     columnHelper.accessor('ParentName', {
       header: 'Name',
       cell: info => <HighlightCell value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
-      enableColumnFilter: true,
-    }),
-    columnHelper.accessor('CMDB', {
-      header: 'CMDB',
-      cell: info => <CMDBRenderer value={info.getValue()} filter={info.column.getFilterValue() as string} globalFilter={globalFilter} />,
       enableColumnFilter: true,
     }),
   ], [globalFilter]);
