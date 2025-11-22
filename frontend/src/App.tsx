@@ -260,7 +260,7 @@ function App() {
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="contained" component="label">
-              Upload Wiz Report
+              Upload Today's Wiz Report
               <input hidden accept=".csv" type="file" onChange={handleUpload} />
             </Button>
 
