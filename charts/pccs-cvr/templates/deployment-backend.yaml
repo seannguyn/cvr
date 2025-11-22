@@ -18,13 +18,14 @@ spec:
           image: {{ .Values.backend.image }}
           ports:
             - containerPort: {{ .Values.backend.port }}
+          env:
+            - name: DATA_DIR
+              value: "/app/data_cvr"
+            - name: CLUSTER_NAME
+              value: "{{ .Values.clusterName | default "cluster" }}"
           volumeMounts:
             - name: data
-              mountPath: /app/raws
-              subPath: raws
-            - name: data
-              mountPath: /app/reports
-              subPath: reports
+              mountPath: /app/data_cvr
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
       volumes:

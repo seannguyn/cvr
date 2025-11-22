@@ -25,3 +25,7 @@ export const getReport = async (date: string) => {
 export const getAvailableDates = async () => {
   return api.get<{ dates: string[] }>('/reports/all');
 };
+
+export const downloadReport = async (date: string) => {
+  return api.get(`/download/${date}`, { responseType: 'blob' });
+};

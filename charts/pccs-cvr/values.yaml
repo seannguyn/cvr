@@ -19,3 +19,5 @@ frontend:
 storage:
   size: 1Gi
   storageClassName: efs-sc
+
+clusterName: "my-cluster"

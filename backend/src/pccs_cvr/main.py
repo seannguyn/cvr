@@ -146,6 +146,10 @@ def cleanse_k8s_resouces_csv(data: List[Dict[str, str]], filepath: str) -> List[
         # But wait, previous logic handled comma separated values because custom-columns aggregated them.
         # My new SDK logic appends a row per container, so NO comma splitting needed for IMAGE/IMAGEID.
         
+        # Equivalent kubectl commands:
+        # "kubectl get pods -A -o custom-columns='NAMESPACE:.metadata.namespace,PARENT_KIND:.metadata.ownerReferences[0].kind,PARENT_NAME:.metadata.ownerReferences[0].name,IMAGE:.status.initContainerStatuses[*].image,IMAGEID:.status.initContainerStatuses[*].imageID'",
+        # "kubectl get pods -A -o custom-columns='NAMESPACE:.metadata.namespace,PARENT_KIND:.metadata.ownerReferences[0].kind,PARENT_NAME:.metadata.ownerReferences[0].name,IMAGE:.status.containerStatuses[*].image,IMAGEID:.status.containerStatuses[*].imageID'"
+
         new_row = {
             'NAMESPACE': namespace,
             'PARENT_KIND': parent_kind,

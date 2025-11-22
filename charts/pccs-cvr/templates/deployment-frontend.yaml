@@ -17,5 +17,8 @@ spec:
           image: {{ .Values.frontend.image }}
           ports:
             - containerPort: {{ .Values.frontend.port }}
+          env:
+            - name: CLUSTER_NAME
+              value: "{{ .Values.clusterName | default "cluster" }}"
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}

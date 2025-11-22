@@ -28,4 +28,8 @@ RUN echo 'server { \
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+# Install gettext for envsubst
+RUN apk add --no-cache gettext
+
+# Generate config.js from template using envsubst and start nginx
+CMD ["/bin/sh", "-c", "envsubst < /usr/share/nginx/html/config.template.js > /usr/share/nginx/html/config.js && nginx -g 'daemon off;'"]

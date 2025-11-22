@@ -4,7 +4,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
-import { uploadReport, generateReport, getReport, getAvailableDates } from './api';
+import { uploadReport, generateReport, getReport, getAvailableDates, downloadReport } from './api';
 import Papa from 'papaparse';
 import {
   useReactTable,
@@ -21,6 +21,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import ViewColumnIcon from '@mui/icons-material/ViewColumn';
+import DownloadIcon from '@mui/icons-material/Download';
 
 // Define the shape of our data
 interface ReportRow {
@@ -171,7 +172,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string | React.ReactNode } | null>(null);
   const [data, setData] = useState<ReportRow[]>([]);
   const [globalFilter, setGlobalFilter] = useState('');
 
@@ -189,8 +190,8 @@ function App() {
     setAnchorEl(null);
   };
 
-  // Environment variable for Cluster Name (Vite uses import.meta.env)
-  const clusterName = import.meta.env.VITE_CLUSTER_NAME || 'UNKNOWN_CLUSTER';
+  // Environment variable for Cluster Name (Runtime config or Vite build time fallback)
+  const clusterName = window.config?.clusterName || import.meta.env.VITE_CLUSTER_NAME || 'UNKNOWN_CLUSTER';
 
   useEffect(() => {
     const fetchDates = async () => {
@@ -240,7 +241,7 @@ function App() {
           transformHeader: (header) => header.trim(), // Handle potential CRLF issues
           complete: (results) => {
             setData(results.data);
-            setMessage({ type: 'success', text: `Abracadabra! Report generated successfully for date: ${dateStr}!` });
+            setMessage({ type: 'success', text: <span>Abracadabra! Report generated successfully for date: <strong>{dateStr}</strong>!</span> });
           },
         });
       } catch (error) {
@@ -276,6 +277,34 @@ function App() {
       } finally {
         setLoading(false);
       }
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!selectedDate) return;
+    const dateStr = selectedDate.format('YYYY-MM-DD');
+    try {
+      const response = await downloadReport(dateStr);
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `${clusterName}-cvr-${dateStr}.zip`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch && filenameMatch.length === 2)
+          filename = filenameMatch[1];
+      }
+
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (e) {
+      console.error("Download failed", e);
+      setMessage({ type: 'error', text: "Failed to download report." });
     }
   };
 
@@ -414,6 +443,15 @@ function App() {
             <Box sx={{ mb: 2 }}>
               <Typography variant="h6">
                 Container Vulnerabilities Report <b>{selectedDate?.format('YYYY-MM-DD')}</b>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleDownload}
+                  sx={{ ml: 2 }}
+                  disabled={!selectedDate || data.length === 0}
+                >
+                  Download
+                </Button>
               </Typography>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Typography variant="subtitle1">with:</Typography>

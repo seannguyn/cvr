@@ -1,10 +1,11 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import shutil
 import os
 from datetime import datetime
 import logging
+import zipfile
 from .main import fetch_k8s_resources, cleanse_k8s_resouces_csv, generate_final_report, fetch_wiz_container_vulnerabilities_report
 
 # Setup logging
@@ -24,12 +25,12 @@ app.add_middleware(
 )
 
 # Constants
-RAW_DIR = os.getenv("RAW_DIR", "../raws")
-REPORT_DIR = os.getenv("REPORT_DIR", "../reports")
+DATA_DIR = os.getenv("DATA_DIR", "../data_cvr")
+RAW_DIR = os.path.join(DATA_DIR, "raws")
+REPORT_DIR = os.path.join(DATA_DIR, "reports")
+CLUSTER_NAME = os.getenv("CLUSTER_NAME", "cluster")
 
 # Ensure directories exist
-# Note: In a read-only container or if paths are relative to root, this might fail if not careful.
-# For local dev (../raws), it checks the parent dir.
 os.makedirs(RAW_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)
 
@@ -116,22 +117,6 @@ async def get_all_reports():
                 # Extract date from filename: YYYY-MM-DD-cvr.csv
                 date_part = f.replace("-cvr.csv", "")
                 dates.append(date_part)
-        
-        # Also check raws/ for uploaded wiz files, as they are "available" to be generated?
-        # The requirement says "only allow user to select date from date picker on based on available report".
-        # But if I upload a file, I want to be able to select that date to GENERATE the report.
-        # "expose a new endpoint: report/all, which returns all report date in YYYY-MM-DD format. Frontend should call this endpoint first thing when it loads, and only allow user to select date from date picker on based on available report."
-        # If it means "available FINAL report", then I should only list generated ones.
-        # But if the user just uploaded a file, they need to select the date to generate it.
-        # So I should probably include dates that have a Wiz file available in raws/ too.
-        
-        raw_files = os.listdir(RAW_DIR)
-        for f in raw_files:
-            if f.endswith("-wiz.csv"):
-                date_part = f.replace("-wiz.csv", "")
-                if date_part not in dates:
-                    dates.append(date_part)
-                    
         return {"dates": sorted(dates)}
     except Exception as e:
         logger.error(f"Error listing reports: {e}")
@@ -144,6 +129,62 @@ async def get_report(date: str):
         return FileResponse(file_path, media_type='text/csv', filename=f"{date}-cvr.csv")
     else:
         raise HTTPException(status_code=404, detail="Report not found")
+
+def cleanup_file(path: str):
+    """Deletes a file if it exists."""
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+            logger.info(f"Deleted temporary file: {path}")
+    except Exception as e:
+        logger.warning(f"Failed to delete temporary file {path}: {e}")
+
+@app.get("/download/{date}")
+async def download_zip(date: str, background_tasks: BackgroundTasks):
+    """Generates and downloads a zip file containing the CSV and MD reports."""
+    try:
+        # Validate date
+        datetime.strptime(date, "%Y-%m-%d")
+        
+        csv_path = f"{REPORT_DIR}/{date}-cvr.csv"
+        md_path = f"{REPORT_DIR}/{date}-cvr.md"
+        
+        if not os.path.exists(csv_path) or not os.path.exists(md_path):
+             raise HTTPException(status_code=404, detail="Report files not found. Please generate the report first.")
+
+        # Generate zip filename
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        if date == today_str:
+            timestamp = datetime.now().strftime("%H-%M-%S")
+            zip_filename = f"{CLUSTER_NAME}-cvr-{date}-{timestamp}.zip"
+            csv_arcname = f"{CLUSTER_NAME}-cvr-{date}-{timestamp}.csv"
+            md_arcname = f"{CLUSTER_NAME}-cvr-{date}-{timestamp}.md"
+        else:
+            zip_filename = f"{CLUSTER_NAME}-cvr-{date}.zip"
+            csv_arcname = f"{CLUSTER_NAME}-cvr-{date}.csv"
+            md_arcname = f"{CLUSTER_NAME}-cvr-{date}.md"
+            
+        zip_path = f"{REPORT_DIR}/{zip_filename}"
+        
+        # Create zip file
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            zipf.write(csv_path, arcname=csv_arcname)
+            zipf.write(md_path, arcname=md_arcname)
+            
+        logger.info(f"Created zip file: {zip_path}")
+        
+        # Schedule cleanup
+        background_tasks.add_task(cleanup_file, zip_path)
+        
+        return FileResponse(zip_path, media_type='application/zip', filename=zip_filename)
+
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error creating zip download: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():
