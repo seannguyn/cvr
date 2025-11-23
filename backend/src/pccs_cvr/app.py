@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 import zipfile
 from .main import fetch_k8s_resources, cleanse_k8s_resouces_csv, generate_final_report, fetch_wiz_container_vulnerabilities_report
+from time import sleep
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -64,12 +65,7 @@ async def generate_report(request: ReportRequest):
         k8s_csv_path = f"{RAW_DIR}/{date_str}-k8s.csv"
         report_base_path = f"{REPORT_DIR}/{date_str}-cvr"
         report_csv_path = f"{report_base_path}.csv"
-        
-        # Check if report already exists
-        if os.path.exists(report_csv_path):
-            logger.info(f"Report for {date_str} already exists. Returning it.")
-            return JSONResponse(content={"message": "Report generated successfully", "file_name": report_csv_path}, status_code=200)
-        
+
         # Check if Wiz file exists
         if not os.path.exists(wiz_csv_path):
             raise HTTPException(status_code=404, detail=f"Wiz report for {date_str} not found. Please upload it first.")

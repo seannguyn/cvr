@@ -73,6 +73,7 @@ const SEVERITY_COLORS = {
   High: { bg: '#fff3e0', text: '#ed6c02' },
   Medium: { bg: '#ffe9aeff', text: '#a59700ff' },
   Low: { bg: '#f5f5f5', text: '#616161' },
+  None: { bg: '#f5f5f5', text: '#616161' },
 };
 
 // Severity Chip Renderer
@@ -158,7 +159,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState<Dayjs | null>(null);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string | React.ReactNode } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'loading'; text: string | React.ReactNode } | null>(null);
   const [data, setData] = useState<ReportRow[]>([]);
   const [globalFilter, setGlobalFilter] = useState('');
 
@@ -209,13 +210,8 @@ function App() {
       const dateStr = selectedDate.format('YYYY-MM-DD');
       try {
         setLoading(true);
+        setData([]); // Clear previous data
         setMessage(null);
-
-        // Check if we need to generate it first (if it's today and not generated yet?
-        // The requirement says "if there is report for today, date picker auto pick today's date, and display TanStack CVE table"
-        // But if we just uploaded, we might need to generate.
-        // Let's try to generate, backend handles "if exists return it".
-        await generateReport(dateStr);
 
         // Fetch the generated report
         const response = await getReport(dateStr);
@@ -249,6 +245,12 @@ function App() {
         setMessage({ type: 'success', text: 'Wiz report uploaded successfully!' });
 
         const today = dayjs().format('YYYY-MM-DD');
+
+        setData([]);
+        setMessage({ type: 'loading', text: <span>Crunching Numbers for today: <strong>{today}</strong> CVEs.....<span className="loading-hourglass">⏳</span></span> });
+
+        await generateReport(today);
+
         setAvailableDates(prev => [...prev, today]);
         setSelectedDate(dayjs(today));
 
@@ -359,7 +361,7 @@ function App() {
 
   // Calculate counts
   const counts = useMemo(() => {
-    const c = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    const c = { Critical: 0, High: 0, Medium: 0, Low: 0, None: 0 };
     data.forEach(row => {
       if (row.Severity in c) {
         // Count number of CVEs in this row (split by comma)
@@ -392,7 +394,7 @@ function App() {
             <Tooltip title={<div style={{ whiteSpace: 'pre-line' }}>Container Vulnerability Report{'\n'}is only available for current month</div>} arrow placement="right">
               <div>
                 <DatePicker
-                  label="Select Date"
+                  label="Select Date for CVEs"
                   value={selectedDate}
                   onChange={(newValue) => setSelectedDate(newValue)}
                   shouldDisableDate={isDateDisabled}
@@ -405,7 +407,7 @@ function App() {
           </Box>
 
           {message && (
-            <Alert severity={message.type} sx={{ mt: 2 }}>
+            <Alert severity={message.type === 'loading' ? 'info' : message.type} sx={{ mt: 2 }}>
               {message.text}
             </Alert>
           )}
@@ -414,7 +416,7 @@ function App() {
         {data.length === 0 && !loading && (
           <Paper sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom>
-              Upload Today&apos;s wiz report to view today&apos;s live CVEs.
+              Upload Today&apos;s <strong>{dayjs().format('YYYY-MM-DD')}</strong> Wiz Report to view current live CVEs.
             </Typography>
             <Typography variant="body1" gutterBottom>
               Instructions to export Wiz Container Vulnerabilities report is <Link href="https://app.wiz.io" target="_blank" rel="noopener">here</Link>.
@@ -445,6 +447,7 @@ function App() {
                 <Typography sx={{ color: SEVERITY_COLORS.High.text, fontWeight: 'bold' }}>{counts.High}</Typography><SeverityRenderer value="High" />
                 <Typography sx={{ color: SEVERITY_COLORS.Medium.text, fontWeight: 'bold' }}>{counts.Medium}</Typography><SeverityRenderer value="Medium" />
                 <Typography sx={{ color: SEVERITY_COLORS.Low.text, fontWeight: 'bold' }}>{counts.Low}</Typography><SeverityRenderer value="Low" />
+                <Typography sx={{ color: SEVERITY_COLORS.None.text, fontWeight: 'bold' }}>{counts.None}</Typography><SeverityRenderer value="None" />
               </Stack>
             </Box>
 

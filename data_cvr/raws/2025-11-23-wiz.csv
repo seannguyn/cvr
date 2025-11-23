@@ -1,0 +1,2 @@
+ID,Name,Severity,WizURL,AssetName,ImageId,Package Name,Package Version,Fixed Version,Vulnerability ID,CVE Score,Image Tag,Registry,Scan Date,Status
+10000001-0001-5101-0001-000000000001,CVE-2024-55321,Critical,https://app.wiz.io/explorer/vulnerability-findings#~(entity~(~'10000001-0001-5101-0001-000000000001*2cSECURITY_TOOL_FINDING)),602401143452.dkr.ecr.ap-southeast-2.amazonaws.com/amazon-k8s-cni-init@4cc269e5,sha256:4cc269e566688eeabf7f59533ffcc8ddb629d4956e1963b704052bfec70a9b46,libcrypto1.1,1.1.1k,1.1.1w,CVE-2024-55321,9.8,v1.13.1-eksbuild.1,Amazon ECR,2025-11-21,Open
