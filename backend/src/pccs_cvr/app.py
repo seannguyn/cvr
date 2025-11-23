@@ -68,7 +68,7 @@ async def generate_report(request: ReportRequest):
         # Check if report already exists
         if os.path.exists(report_csv_path):
             logger.info(f"Report for {date_str} already exists. Returning it.")
-            return JSONResponse(content={"message": f"Report generated successfully", "file_name": report_csv_path}, status_code=200)
+            return JSONResponse(content={"message": "Report generated successfully", "file_name": report_csv_path}, status_code=200)
         
         # Check if Wiz file exists
         if not os.path.exists(wiz_csv_path):
@@ -96,7 +96,7 @@ async def generate_report(request: ReportRequest):
         # 4. Generate Final Report
         generate_final_report(k8s_cleansed_data, wiz_data, report_base_path, date_str)
         
-        return JSONResponse(content={"message": f"Report generated successfully", "file_name": report_csv_path}, status_code=200)
+        return JSONResponse(content={"message": "Report generated successfully", "file_name": report_csv_path}, status_code=200)
 
     except HTTPException as he:
         raise he
@@ -150,7 +150,7 @@ async def download_zip(date: str, background_tasks: BackgroundTasks):
         md_path = f"{REPORT_DIR}/{date}-cvr.md"
         
         if not os.path.exists(csv_path) or not os.path.exists(md_path):
-             raise HTTPException(status_code=404, detail="Report files not found. Please generate the report first.")
+            raise HTTPException(status_code=404, detail="Report files not found. Please generate the report first.")
 
         # Generate zip filename
         today_str = datetime.now().strftime("%Y-%m-%d")

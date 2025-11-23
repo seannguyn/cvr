@@ -26,7 +26,11 @@
   "devDependencies": {
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
     "@vitejs/plugin-react": "^4.0.3",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react": "^7.37.5",
     "typescript": "^5.0.2",
     "vite": "^4.4.5"
   }

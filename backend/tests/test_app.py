@@ -2,7 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 from pccs_cvr.app import app
-import os
 
 client = TestClient(app)
 

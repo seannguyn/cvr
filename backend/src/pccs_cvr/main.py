@@ -1,7 +1,7 @@
 import logging
 import sys
 import csv
-from typing import List, Dict, Any
+from typing import List, Dict
 from kubernetes import client, config
 
 def setup_logging():

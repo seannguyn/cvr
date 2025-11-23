@@ -45,7 +45,7 @@ const CVERenderer = ({ value }: { value: string }) => {
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
       {cves.map((cve, index) => {
-        const match = cve.match(/\[(.*?)\]\((.*?)\)/);
+        const match = cve.match(/\[(.*?)\]\((.*)\)/);
         if (match) {
           return (
             <span key={index}>
@@ -230,7 +230,7 @@ function App() {
             setMessage({ type: 'success', text: <span>Abracadabra! Report generated successfully for date: <strong>{dateStr}</strong>!</span> });
           },
         });
-      } catch (error) {
+      } catch {
         setMessage({ type: 'error', text: 'Looks like our bot is on sick leave today. Please try again, or contact PCCS.' });
         setData([]);
       } finally {
@@ -252,7 +252,7 @@ function App() {
         setAvailableDates(prev => [...prev, today]);
         setSelectedDate(dayjs(today));
 
-      } catch (error) {
+      } catch {
         setMessage({ type: 'error', text: 'Failed to upload report.' });
       } finally {
         setLoading(false);
@@ -385,11 +385,11 @@ function App() {
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button variant="contained" component="label">
-              Upload Today's Wiz Report
+              Upload Today&apos;s Wiz Report
               <input hidden accept=".csv" type="file" onChange={handleUpload} />
             </Button>
 
-            <Tooltip title={<div style={{ whiteSpace: 'pre-line' }}>Container Vulnerability Report{'\n'}is only available for current month</div>} arrow>
+            <Tooltip title={<div style={{ whiteSpace: 'pre-line' }}>Container Vulnerability Report{'\n'}is only available for current month</div>} arrow placement="right">
               <div>
                 <DatePicker
                   label="Select Date"
@@ -414,7 +414,7 @@ function App() {
         {data.length === 0 && !loading && (
           <Paper sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom>
-              Upload Today's wiz report to view today's live CVEs.
+              Upload Today&apos;s wiz report to view today&apos;s live CVEs.
             </Typography>
             <Typography variant="body1" gutterBottom>
               Instructions to export Wiz Container Vulnerabilities report is <Link href="https://app.wiz.io" target="_blank" rel="noopener">here</Link>.

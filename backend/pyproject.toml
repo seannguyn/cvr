@@ -15,7 +15,8 @@ dependencies = [
     "python-multipart",
     "kubernetes",
     "pytest",
-    "httpx"
+    "httpx",
+    "flake8"
 ]
 
 [project.scripts]

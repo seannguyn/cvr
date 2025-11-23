@@ -19,6 +19,31 @@ graph TD
     end
 ```
 
+## Development Commands
+
+The project includes a `Makefile` to standardize common development tasks.
+
+### Build
+```bash
+make build-backend   # Build backend Docker image
+make build-frontend  # Build frontend Docker image
+make build-all       # Build both
+```
+
+### Test & Lint
+```bash
+make test-backend    # Run backend unit tests
+make lint-backend    # Run backend linting (flake8)
+make lint-frontend   # Run frontend linting (eslint)
+```
+
+### Run Locally
+```bash
+make run-backend     # Start backend server
+make run-frontend    # Start frontend dev server
+make run-all         # Start both (in parallel)
+```
+
 ## Backend
 
 The backend is a FastAPI application responsible for data processing and report generation.

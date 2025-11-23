@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open
 from pccs_cvr.main import cleanse_k8s_resouces_csv, generate_final_report
 
 def test_cleanse_k8s_resouces_csv():
