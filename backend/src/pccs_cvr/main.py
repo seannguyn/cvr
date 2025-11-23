@@ -185,7 +185,7 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
     logger = logging.getLogger(__name__)
     logger.info("Generating final report...")
     
-    # Grouping dictionary: key -> set of (CVE Name, CVE Link)
+    # Grouping dictionary: key -> set of (CVE Name, CVE WizURL)
     grouped_data = {}
     
     # Severity order for sorting
@@ -213,10 +213,10 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
                 if key not in grouped_data:
                     grouped_data[key] = set()
                 
-                # Add CVE Name and Link to the set for this group
+                # Add CVE Name and WizURL to the set for this group
                 cve_name = wiz_row.get('Name')
-                cve_link = wiz_row.get('Link', '')
-                grouped_data[key].add((cve_name, cve_link))
+                cve_wizurl = wiz_row.get('WizURL', '')
+                grouped_data[key].add((cve_name, cve_wizurl))
 
     # Convert grouped data to list of dicts with CamelCase keys
     # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName, CMDB
@@ -225,11 +225,11 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
         # Sort CVEs by name
         sorted_cves = sorted(list(cves), key=lambda x: x[0])
         
-        # Format CVEs as [Name](Link)
+        # Format CVEs as [Name](WizURL)
         cve_strings = []
-        for name, link in sorted_cves:
-            if link:
-                cve_strings.append(f"[{name}]({link})")
+        for name, wizurl in sorted_cves:
+            if wizurl:
+                cve_strings.append(f"[{name}]({wizurl})")
             else:
                 cve_strings.append(name)
         

@@ -36,7 +36,7 @@ interface ReportRow {
   CMDB: string;
 }
 
-// Helper to parse markdown links [Name](Link)
+// Helper to parse markdown links [Name](WizURL)
 const CVERenderer = ({ value }: { value: string }) => {
   if (!value) return null;
   // Split by comma, but be careful if comma is inside [] or ().

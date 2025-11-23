@@ -1,2 +1,5 @@
 plan
 .DS_Store
+data_cvr/raws/*.csv
+data_cvr/reports/*.csv
+data_cvr/reports/*.md

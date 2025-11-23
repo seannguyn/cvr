@@ -26,7 +26,7 @@ def test_generate_final_report():
         {'NAMESPACE': 'ns1', 'PARENT_KIND': 'Deployment', 'PARENT_NAME': 'dep1', 'IMAGE': 'img1', 'IMAGEID': 'sha256:1234567890', 'CMDB': 'cmdb1'}
     ]
     wiz_data = [
-        {'ImageId': '1234567890', 'AssetName': 'asset1', 'Severity': 'Critical', 'Name': 'CVE-1', 'Link': 'http://cve.com'}
+        {'ImageId': '1234567890', 'AssetName': 'asset1', 'Severity': 'Critical', 'Name': 'CVE-1', 'WizURL': 'https://app.wiz.io/'}
     ]
     
     with patch("builtins.open", mock_open()) as mock_file:
