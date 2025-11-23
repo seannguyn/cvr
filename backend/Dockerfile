@@ -13,8 +13,7 @@ COPY src/ src/
 
 # Install dependencies
 # We install in editable mode or just install the package
-RUN pip install --no-cache-dir . \
-    && pip install --no-cache-dir fastapi uvicorn python-multipart kubernetes
+RUN pip install --no-cache-dir .
 
 # Set environment variables
 ENV RAW_DIR=raws

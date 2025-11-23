@@ -19,11 +19,32 @@ graph TD
     end
 ```
 
+## Prerequisites
+
+Ensure your environment matches the following versions:
+
+### backend:
+- **Python**: 3.9.6+
+- **Pip**: 25.3+
+
+### frontend:
+- **Node.js**: 23.7.0+
+- **NPM**: 10.9.2+
+
 ## Development Commands
 
 The project includes a `Makefile` to standardize common development tasks.
 
-### Build
+### Initialize (For Local Development)
+Required before running `test`, `lint`, or `run` commands locally.
+```bash
+make init-backend    # Setup Python venv and install dependencies
+make init-frontend   # Install Node.js dependencies
+make init-all        # Setup both
+```
+
+### Build (Docker)
+Docker builds are self-contained and do **not** require initialization.
 ```bash
 make build-backend   # Build backend Docker image
 make build-frontend  # Build frontend Docker image

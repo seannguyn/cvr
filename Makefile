@@ -1,4 +1,13 @@
-.PHONY: build test lint run
+.PHONY: init build test lint run
+
+# Initialize local environment
+init-backend:
+	cd backend && python3 -m venv .venv && . .venv/bin/activate && pip install -e .
+
+init-frontend:
+	cd frontend && npm install
+
+init-all: init-backend init-frontend
 
 # Build Docker images
 build-backend:
