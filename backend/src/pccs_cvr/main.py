@@ -221,6 +221,8 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
     # Convert grouped data to list of dicts with CamelCase keys
     # Requested order: Image, AssetName, Severity, CVEs, Scan Date, Namespace, ParentKind, ParentName, CMDB
     final_rows = []
+    cve_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+    
     for key, cves in grouped_data.items():
         # Sort CVEs by name
         sorted_cves = sorted(list(cves), key=lambda x: x[0])
@@ -229,9 +231,17 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
         cve_strings = []
         for name, wizurl in sorted_cves:
             if wizurl:
-                cve_strings.append(f"[{name}]({wizurl})")
+                cve_str = f"[{name}]({wizurl})"
             else:
-                cve_strings.append(name)
+                cve_str = name
+            
+            if cve_str not in cve_strings:
+                cve_strings.append(cve_str)
+        
+        # Update counts
+        severity = key[5]
+        if severity in cve_counts:
+            cve_counts[severity] += len(cve_strings)
         
         row = {
             'Image': key[3],
@@ -272,6 +282,12 @@ def generate_final_report(k8s_data: List[Dict[str, str]], wiz_data: List[Dict[st
     md_path = f"{output_base_path}.md"
     with open(md_path, mode='w', encoding='utf-8') as f:
         f.write("# Container Vulnerability Report\n\n")
+        
+        # Write Summary
+        f.write("## Severity Summary\n")
+        for sev, count in cve_counts.items():
+            f.write(f"- **{sev}**: {count}\n")
+        f.write("\n")
         
         f.write("| " + " | ".join(keys) + " |\n")
         f.write("| " + " | ".join(["---"] * len(keys)) + " |\n")
